@@ -50,7 +50,7 @@ h1{margin:0;font-weight:800;font-size:clamp(2rem,6vw,3.1rem);line-height:1.04;le
 .course{margin:4px 0 0;color:var(--muted);font-weight:700}
 .namerow{margin-top:16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .namerow label{font-weight:700}
-.namerow input{flex:1 1 260px;max-width:420px}
+.namerow input{flex:1 1 180px;max-width:280px}
 
 /* warning */
 .warn{background:var(--warn-bg);color:var(--warn-ink);border:3px solid var(--warn-line);
@@ -79,6 +79,25 @@ h1{margin:0;font-weight:800;font-size:clamp(2rem,6vw,3.1rem);line-height:1.04;le
 .open{display:inline-block;text-decoration:none;font-weight:700;background:var(--primary);color:var(--primary-ink);
   border-radius:8px;padding:10px 16px}
 .open:hover{filter:brightness(1.08)}
+.vid{position:relative;width:100%;aspect-ratio:16/9;border-radius:10px;overflow:hidden;background:#000;border:1px solid var(--line)}
+.vid iframe,.vid video{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+.vidalt{margin:8px 0 0;font-size:.9rem;color:var(--muted)}
+.vidalt a{color:var(--primary);font-weight:700}
+.watch{margin-top:10px}
+.vidblock{margin:22px 0 8px}
+.vidtitle{margin:0 0 8px;font-weight:700}
+.reading{max-width:68ch;margin:16px 0}
+.reading p{margin:0 0 12px}
+.subhead{font-weight:800;font-size:1.3rem;margin:34px 0 4px}
+.fig{margin:18px 0;max-width:100%}
+.fig img{display:block;max-width:100%;height:auto;border-radius:8px;border:1px solid var(--line)}
+.fig.narrow img{width:min(100%,420px)}
+.fig.wide img{width:100%;background:#fff}
+.fig figcaption{margin-top:8px;font-size:.93rem;font-style:italic;color:var(--muted);max-width:68ch}
+.fig.side{display:flex;flex-wrap:wrap;gap:16px 22px;align-items:center}
+.fig.side img{width:min(100%,260px);background:#fff;flex:none}
+.fig.side figcaption{flex:1 1 240px;margin:0;font-size:1rem;font-style:normal;color:var(--ink)}
+.credit{margin-top:22px;font-size:.85rem;color:var(--muted)}
 .q{border-left:5px solid var(--line);padding:4px 0 4px 16px;margin:26px 0}
 .q[data-s="done"]{border-color:var(--ok)}
 .q[data-s="bad"]{border-color:var(--bad)}
@@ -191,8 +210,10 @@ details.backup textarea{min-height:90px;margin-top:8px;font:.8rem/1.3 ui-monospa
     </div>
   </div>
   <div class="namerow">
-    <label for="name">Your name</label>
-    <input type="text" id="name" autocomplete="name" placeholder="First and last name">
+    <label for="first">First name</label>
+    <input type="text" id="first" autocomplete="given-name" placeholder="First name">
+    <label for="last">Last name</label>
+    <input type="text" id="last" autocomplete="family-name" placeholder="Last name">
   </div>
 </header>
 
@@ -202,7 +223,7 @@ details.backup textarea{min-height:90px;margin-top:8px;font:.8rem/1.3 ui-monospa
   <ul>
     <li>Every link in this webquest opens in a new tab. Keep this tab open and come back to it to enter your answers.</li>
     <li>Do not use your browser’s back button or refresh button.</li>
-    <li>When you finish, scroll to the bottom, create your submission summary, and paste it into Canvas.</li>
+    <li>When you finish, scroll to the bottom, download your PDF, and upload it to the Canvas assignment.</li>
   </ul>
   <p class="small">This page keeps a backup copy in your browser as you work, but don’t count on it. It disappears if you switch devices, use a private window, or clear your browser data.</p>
 </aside>
@@ -216,12 +237,14 @@ details.backup textarea{min-height:90px;margin-top:8px;font:.8rem/1.3 ui-monospa
   <div class="statsrow">
     <span id="sAuto"></span>
     <span id="sWritten"></span>
+    <span id="sTime"></span>
     <span id="sSaved"></span>
   </div>
 </div>
 
 <main id="app"></main>
 <noscript><p>This webquest needs JavaScript. Please open it in a current browser.</p></noscript>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
 
 </div>
 
@@ -233,7 +256,7 @@ details.backup textarea{min-height:90px;margin-top:8px;font:.8rem/1.3 ui-monospa
 /* Links                                                               */
 /* ------------------------------------------------------------------ */
 var LINKS={
-  video:'https://eliteaa.instructuremedia.com/embed/99d58c95-43e8-40e6-a5bc-be006859aad7',
+  video:'https://www.youtubeeducation.com/embed/-dbRterutHY',
   site:'https://sites.google.com/eliteacademic.com/cellsignaling/home',
   genetics:'https://learn.genetics.utah.edu/content/cells/signals/'
 };
@@ -242,7 +265,17 @@ var LINKS={
 /* State and saving                                                    */
 /* ------------------------------------------------------------------ */
 var KEY='cell-signaling-webquest-v1', storageOK=true, lastSaved=null, finished=false;
-function fresh(){return {name:'',auto:{},written:{},seq:{}};}
+function fresh(){return {name:'',first:'',last:'',time:0,started:new Date().toISOString(),auto:{},written:{},seq:{},vids:{}};}
+function fullName(){return ((S.first||'').trim()+' '+(S.last||'').trim()).trim();}
+function copyMeta(f,o){
+  f.name=typeof o.name==='string'?o.name:'';
+  f.first=typeof o.first==='string'?o.first:(f.name||'');
+  f.last=typeof o.last==='string'?o.last:'';
+  f.time=typeof o.time==='number'&&o.time>=0?o.time:0;
+  if(typeof o.started==='string') f.started=o.started;
+  if(o.vids&&typeof o.vids==='object') f.vids=o.vids;
+  else if(o.vid&&typeof o.vid.w==='string') f.vids={intro:o.vid};
+}
 function load(){
   try{
     var r=localStorage.getItem(KEY);
@@ -250,7 +283,7 @@ function load(){
       var o=JSON.parse(r);
       if(o&&typeof o==='object'){
         var f=fresh();
-        f.name=typeof o.name==='string'?o.name:'';
+        copyMeta(f,o);
         f.auto=o.auto||{}; f.written=o.written||{}; f.seq=o.seq||{};
         return f;
       }
@@ -276,6 +309,93 @@ function h(tag,cls,txt){
   return e;
 }
 function mark(el){el.setAttribute('data-c','');return el;}
+
+/* Video watch tracking: records each second actually played at normal flow */
+var VID_DONE=95;
+var VIDS={
+  intro:{n:539,title:'Intro to Cell Signaling',src:'media/intro-cell-signaling.mp4'},
+  overview:{n:529,title:'Overview of Cell Signaling',src:'media/overview-cell-signaling.mp4'},
+  neurons:{n:79,title:'How Neurons Communicate',src:'media/how-neurons-communicate.mp4'},
+  dropping:{n:84,title:'Dropping Signals',src:'media/dropping-signals.mp4'}
+};
+var VID_ORDER=['intro','overview','neurons','dropping'];
+function fmt(sec){sec=Math.round(sec);return Math.floor(sec/60)+':'+String(sec%60).padStart(2,'0');}
+function vidState(key){
+  if(!S.vids) S.vids={};
+  var V=S.vids[key]||(S.vids[key]={w:'',skips:0,rate:1});
+  var n=VIDS[key].n;
+  if(V.w.length!==n) V.w=(V.w+new Array(n+1).join('0')).slice(0,n);
+  return V;
+}
+function vidStats(key){
+  var V=vidState(key), c=0, n=VIDS[key].n;
+  for(var i=0;i<V.w.length;i++) if(V.w[i]==='1') c++;
+  return {sec:c,n:n,pct:Math.min(100,Math.round(100*c/n)),skips:V.skips||0,rate:V.rate||1};
+}
+function videoBlock(key){
+  var info=VIDS[key];
+  var wrap=h('div','vidblock');
+  var vid=h('div','vid');
+  var v=document.createElement('video');
+  v.src=info.src; v.controls=true; v.preload='metadata';
+  v.setAttribute('playsinline','');
+  v.setAttribute('aria-label',info.title+' video');
+  vid.append(v);
+  wrap.append(h('p','vidtitle','Video: '+info.title),vid,watchEl(v,key));
+  return wrap;
+}
+function watchEl(v,key){
+  var V=vidState(key), N=VIDS[key].n;
+  var arr=V.w.split('');
+  var box=h('div','watch');
+  var tt=h('div','tt'); var tf=h('div','tf'); tt.append(tf);
+  tt.setAttribute('role','progressbar'); tt.setAttribute('aria-label','How much of the '+VIDS[key].title+' video you have watched');
+  tt.setAttribute('aria-valuemin','0'); tt.setAttribute('aria-valuemax','100');
+  var txt=h('p','vidalt');
+  box.append(tt,txt);
+  function paint(){
+    var st=vidStats(key);
+    tf.style.width=st.pct+'%'; tt.setAttribute('aria-valuenow',String(st.pct));
+    tf.style.background=st.pct>=VID_DONE?'var(--ok)':'var(--primary)';
+    txt.textContent = st.pct>=VID_DONE
+      ? 'Video complete. You watched '+fmt(st.sec)+' of '+fmt(N)+'.'
+      : 'You have watched '+fmt(st.sec)+' of '+fmt(N)+' ('+st.pct+'%). Your teacher can see how much you watched. Parts you skip don’t count.';
+  }
+  function save1(){V.w=arr.join('');paint();commit();}
+  var last=null;
+  function markRange(a,b){
+    var changed=false;
+    for(var i=Math.max(0,Math.floor(a));i<Math.floor(b)&&i<N;i++){ if(arr[i]!=='1'){arr[i]='1';changed=true;} }
+    return changed;
+  }
+  v.addEventListener('play',function(){last=v.currentTime;});
+  v.addEventListener('timeupdate',function(){
+    if(v.seeking||v.paused) return;
+    var t=v.currentTime;
+    if(last===null){last=t;return;}
+    var d=t-last;
+    if(d>0 && d<1.5*Math.max(1,v.playbackRate)+0.5){ if(markRange(last,t)) save1(); }
+    last=t;
+  });
+  v.addEventListener('seeking',function(){
+    if(last!==null && v.currentTime>last+3){
+      var jumped=false;
+      for(var i=Math.floor(last);i<Math.floor(v.currentTime)&&i<N;i++){ if(arr[i]!=='1'){jumped=true;break;} }
+      if(jumped){V.skips=(V.skips||0)+1; commit();}
+    }
+    last=null;
+  });
+  v.addEventListener('seeked',function(){last=v.paused?null:v.currentTime;});
+  v.addEventListener('ended',function(){
+    if(last!==null && last>N-4 && markRange(last,N)) save1();
+    last=null;
+  });
+  v.addEventListener('ratechange',function(){
+    if(v.playbackRate>(V.rate||1)){V.rate=v.playbackRate;commit();}
+  });
+  paint();
+  return box;
+}
 
 /* registries rebuilt on every render */
 var AUTO={}, SEQ={}, ORDER=[], TOTAL_A=0, TOTAL_W=0;
@@ -661,6 +781,18 @@ function qEl(num,text){
   q.append(hd,body);
   return {q:q,body:body};
 }
+function reading(paras){
+  var d=h('div','reading');
+  paras.forEach(function(t){d.append(h('p',null,t));});
+  return d;
+}
+function figure(src,alt,cap,kind){
+  var f=h('figure','fig '+(kind||''));
+  var im=document.createElement('img'); im.src=src; im.alt=alt;
+  f.append(im);
+  if(cap) f.append(h('figcaption',null,cap));
+  return f;
+}
 function simpleWritten(s,num,text,id){
   var o=qEl(num,text); o.body.append(writtenField(id)); s.append(o.q);
 }
@@ -675,8 +807,9 @@ function groupWritten(s,num,text,items){
 /* ------------------------------------------------------------------ */
 function task1(){
   var s=sectionEl(1,'Introduction to Cell Signaling',
-    'Watch the Cell Signaling video by the Amoeba Sisters and answer the questions as you watch. Pause the video whenever you need to.',
+    'Watch the Intro to Cell Signaling video below and answer the questions underneath it as you watch. Pause the video whenever you need to.',
     LINKS.video,'Open the video');
+  s.querySelector('a.open').replaceWith(videoBlock('intro'));
   var o=qEl(1,'What is the name of the molecule that a signal molecule can bind to?');
   o.body.append(typedQ1()); s.append(o.q);
   simpleWritten(s,2,'What is a ligand?','q2');
@@ -690,14 +823,35 @@ function task1(){
 }
 
 function task2(){
-  var s=sectionEl(2,'Cell Signaling Activity',
-    'Open the Cell Signaling activity by Andrea Bierema (Michigan State University) and answer the questions as you move through it. Use the activity to check your work there, then enter your answers here.',
-    LINKS.site,'Open the activity site');
+  var s=h('section','task'); s.dataset.task='2'; s.id='task2';
+  s.append(h('h2','display','Task 2: Cell Signaling Activity'));
+  s.append(h('p','intro','Read each section, watch the videos, and answer the questions as you go. Everything you need is on this page.'));
+
+  s.append(reading([
+    'Cells “communicate” with each other via signaling. That is, one cell either directly connects or (more often) sends signaling molecules, which are often proteins, to another cell (or sometimes even back to itself), which triggers a response. Cell signaling influences a variety of cell functions, including the synthesis of specific proteins and cell division.',
+    'Not all cells can “catch” a particular signal. In order to detect the signal, the cell must have the right receptor for that signal. When a signaling molecule binds to its receptor, it alters the shape or activity of the receptor, triggering a change inside of the cell. Signaling molecules are often called ligands, a general term for molecules that bind specifically to other molecules (such as receptors).'
+  ]));
+  s.append(figure('media/brain-orexin.jpg',
+    'Microscope image of brain tissue: red round cell bodies, blue nuclei, and green branching fibers.',
+    'An image of normal brain tissue from the thalamus. In red are the receptors for orexin. Orexins are peptide hormones that help keep us awake and alert, and may also stimulate the appetite.','narrow'));
+  s.append(videoBlock('overview'));
+
+  s.append(figure('media/sending-target-cells.png',
+    'Drawing of three cells. A sending cell releases small round ligands. One ligand binds to a receptor on the target cell, which leads to a response. A non-target cell has no receptor for the ligand.',
+    null,'wide'));
+  s.append(reading([
+    'A sending cell produces ligands (signaling molecules) that bind to a receptor on the target cell, which causes a response. Non-target cells do not have a receptor for that specific ligand, so they do not respond.',
+    'The message carried by a ligand is often relayed through a chain of chemical messengers inside the cell. Ultimately, it leads to a change in the cell, such as protein synthesis.'
+  ]));
 
   var o=qEl(7,'Label the diagram. Match each letter to the correct label.');
   o.body.append(diagram()); s.append(o.q);
 
-  o=qEl(8,'Read the text under the diagram on the activity page. Fill in the blanks.');
+  s.append(figure('media/ligand-receptor-response.png',
+    'Drawing of a ligand binding to a receptor on a cell. Inside the cell, chemical messengers relay the signal, which leads to a response.',
+    'Once a ligand (a signaling molecule) binds to a receptor, the receptor relays the signal via chemical messengers to other molecules (such as proteins) in the cell. This chain of events causes a response in the cell.','side'));
+
+  o=qEl(8,'Read the text next to the diagram above. Fill in the blanks.');
   var shared=h('p','msg'); shared.setAttribute('aria-live','polite');
   var pool8=['hormone','ligand','nucleus','proteins','receptor','response'];
   function blank(id,tag,ans,hint){
@@ -715,7 +869,7 @@ function task2(){
     ' in the cell.');
   o.body.append(p,shared); s.append(o.q);
 
-  o=qEl(9,'Complete the first exercise on the activity site by sequencing the basic steps of cell signaling. Then put the five steps in order here.');
+  o=qEl(9,'Put the five basic steps of cell signaling in order. Use the arrows to move each step, then select “Check order.”');
   o.body.append(seqWidget('q9','Q9 sequence of cell signaling',STEPS9,START9)); s.append(o.q);
 
   var pool=['autocrine','endocrine','gap junctions','paracrine','synaptic'];
@@ -732,12 +886,20 @@ function task2(){
     {synaptic:'Close, but synaptic signaling is specific to neurons. Which term covers any short-distance signal between nearby cells?'});
   term(13,'Two or more cells next to each other can signal to each other through spaces in their cellular membranes.','gap junctions','These are channels that connect neighboring cells.');
 
-  o=qEl(14,'Watch the video “How Neurons Communicate.” Then complete the first exercise by sequencing the basic steps of synaptic signaling. Put the four steps in order here.');
+  var sh=h('h3','display subhead','Synaptic signaling'); s.append(sh);
+  s.append(reading([
+    'One unique example of cell signaling is synaptic signaling, in which a nerve cell (called a “neuron”) transmits a signal to another neuron. This process is named for the synapse, the junction between two nerve cells where signal transmission occurs.',
+    'When the sending neuron fires, an electrical impulse moves rapidly through the cell, traveling down a long, fiber-like extension called an axon. When the impulse reaches the synapse, it triggers the release of neurotransmitters, which quickly cross the small gap between the neurons. When the neurotransmitters arrive at the receiving cell, they bind to receptors and cause a chemical change inside of the cell (often, opening ion channels and changing the electrical potential across the membrane). The video below illustrates this process.'
+  ]));
+  s.append(videoBlock('neurons'));
+
+  o=qEl(14,'Using the video “How Neurons Communicate,” put the four steps of synaptic signaling in order. Use the arrows to move each step, then select “Check order.”');
   o.body.append(seqWidget('q14','Q14 sequence of synaptic signaling',STEPS14,START14)); s.append(o.q);
 
   simpleWritten(s,15,'What are neurotransmitters?','q15');
   simpleWritten(s,16,'What is dopamine?','q16');
   simpleWritten(s,17,'Think of something you do when you are feeling down and record it below. (This would be an example of higher dopamine levels and a cell signaling response in your body!)','q17');
+  s.append(h('p','credit','Task 2 readings and activity adapted from the Cell Signaling activity by Andrea Bierema, Michigan State University.'));
   return s;
 }
 
@@ -745,6 +907,8 @@ function task3(){
   var s=sectionEl(3,'Cell Signals Interactive',
     'Open the Dropping Signals interactive on the Learn Genetics website. For each cell, click the info icon to read about it, then drop each signal onto the cell and watch how it responds. Choose your answers below.',
     LINKS.genetics,'Open the interactive');
+  var dv=videoBlock('dropping'); dv.style.marginBottom='18px';
+  s.querySelector('a.open').before(dv);
   var kd=h('details','sigkey'); kd.append(h('summary',null,'What do the four signals mean?'));
   var dl=h('dl');
   [['Light','Energy that travels freely through space.'],
@@ -777,14 +941,40 @@ function task3(){
 /* ------------------------------------------------------------------ */
 /* Finish: summary, backup, reset                                      */
 /* ------------------------------------------------------------------ */
+function fmtDur(sec){
+  var m=Math.round((sec||0)/60);
+  if(m<1) return 'less than 1 minute';
+  var hr=Math.floor(m/60), mm=m%60;
+  return (hr?hr+(hr===1?' hour':' hours')+(mm?' ':''):'')+(mm?mm+(mm===1?' minute':' minutes'):'');
+}
+function fmtDate(d){
+  return d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+' at '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+}
+function summaryParts(){
+  var sc=score(), now=new Date(), st=new Date(S.started);
+  var info=[
+    ['Name',fullName()||'(not entered)'],
+    ['Date completed',fmtDate(now)],
+    ['Time spent working',fmtDur(S.time)],
+    ['First opened',isNaN(st)?'(unknown)':fmtDate(st)]
+  ];
+  var res=VID_ORDER.map(function(k){
+    var vs=vidStats(k);
+    return ['Video: '+VIDS[k].title,'Watched '+fmt(vs.sec)+' of '+fmt(vs.n)+' ('+vs.pct+'%), '+(vs.pct>=VID_DONE?'COMPLETE':'NOT COMPLETE')+'. Skipped ahead '+vs.skips+' time(s). Fastest speed '+vs.rate+'x.'];
+  }).concat([
+    ['Auto-checked items',sc.a+' / '+TOTAL_A+' correct'],
+    ['Written responses',sc.w+' / '+TOTAL_W+' completed']
+  ]);
+  return {info:info,res:res,body:answerLines()};
+}
 function buildSummary(){
-  var sc=score(), L=[];
-  L.push('CELL SIGNALING WEBQUEST (Biology A)');
-  L.push('Name: '+(S.name||'(not entered)'));
-  L.push('Created: '+new Date().toLocaleString());
-  L.push('Auto-checked items correct: '+sc.a+' / '+TOTAL_A);
-  L.push('Written responses completed: '+sc.w+' / '+TOTAL_W);
+  var p=summaryParts(), L=['CELL SIGNALING WEBQUEST (Biology A)'];
+  p.info.concat(p.res).forEach(function(r){L.push(r[0]+': '+r[1]);});
   L.push('');
+  return L.concat(p.body).join('\n');
+}
+function answerLines(){
+  var L=[];
   ORDER.forEach(function(o){
     if(o.kind==='auto'){
       var r=S.auto[o.id];
@@ -804,7 +994,86 @@ function buildSummary(){
       if(!c.noModel) L.push('   [model answer: '+(w.mark==='match'?'student says theirs covers it':w.mark==='revise'?'student planned to revise':(w.revealed?'viewed, no self-check':'not compared'))+']');
     }
   });
-  return L.join('\n');
+  return L;
+}
+
+/* PDF report */
+function pdfSafe(t){
+  return String(t)
+    .replace(/[‘’‛′]/g,"'").replace(/[“”‟″]/g,'"')
+    .replace(/[–—−]/g,'-').replace(/…/g,'...').replace(/ /g,' ')
+    .replace(/[←-⇿]/g,'->').replace(/[^\x09\x0A\x0D\x20-\x7E¡-ÿ]/g,'');
+}
+async function buildPdf(){
+  var L=window.PDFLib;
+  if(!L) throw new Error('nolib');
+  var doc=await L.PDFDocument.create();
+  doc.setTitle('Cell Signaling Webquest - '+pdfSafe(fullName()));
+  doc.setAuthor(pdfSafe(fullName()));
+  var F=await doc.embedFont(L.StandardFonts.Helvetica), FB=await doc.embedFont(L.StandardFonts.HelveticaBold);
+  var W0=612, PH=792, M=54, CW=W0-2*M, y=0, page=null;
+  var INK=L.rgb(22/255,33/255,58/255), MUTED=L.rgb(82/255,96/255,122/255), TEAL=L.rgb(11/255,95/255,122/255), LINE=L.rgb(211/255,219/255,232/255);
+  function newPage(){ page=doc.addPage([W0,PH]); y=M; }
+  function room(n){ if(!page||y+n>PH-M) newPage(); }
+  function wrap(t,font,size,width){
+    var out=[];
+    t.split('\n').forEach(function(par){
+      var words=par.split(/ +/), line='';
+      words.forEach(function(w){
+        var test=line?line+' '+w:w;
+        if(font.widthOfTextAtSize(test,size)<=width){ line=test; return; }
+        if(line) out.push(line);
+        while(font.widthOfTextAtSize(w,size)>width){
+          var k=w.length; while(k>1&&font.widthOfTextAtSize(w.slice(0,k),size)>width) k--;
+          out.push(w.slice(0,k)); w=w.slice(k);
+        }
+        line=w;
+      });
+      out.push(line);
+    });
+    return out;
+  }
+  function text(t,size,bold,indent,color){
+    indent=indent||0;
+    var font=bold?FB:F, lh=size*1.35;
+    wrap(pdfSafe(t),font,size,CW-indent).forEach(function(ln){
+      room(lh);
+      page.drawText(ln,{x:M+indent,y:PH-y-size,size:size,font:font,color:color||INK});
+      y+=lh;
+    });
+  }
+  function rule(c,th){ room(th+2); page.drawLine({start:{x:M,y:PH-y},end:{x:W0-M,y:PH-y},thickness:th,color:c}); }
+  var p=summaryParts();
+  newPage();
+  text('Cell Signaling Webquest',22,true);
+  text('Biology A',12,true,0,MUTED);
+  y+=8; rule(TEAL,2); y+=14;
+  p.info.forEach(function(r){
+    var lines=wrap(pdfSafe(r[1]),F,12,CW-140);
+    room(18*lines.length);
+    page.drawText(pdfSafe(r[0]+':'),{x:M,y:PH-y-12,size:12,font:FB,color:INK});
+    lines.forEach(function(ln,i){ page.drawText(ln,{x:M+140,y:PH-y-12-18*i,size:12,font:F,color:INK}); });
+    y+=18*lines.length;
+  });
+  y+=8;
+  text('Results',14,true); y+=2;
+  p.res.forEach(function(r){ text(r[0]+': '+r[1],11,false); y+=2; });
+  y+=8; rule(LINE,1); y+=14;
+  text('Answers',14,true); y+=4;
+  p.body.forEach(function(ln){
+    if(/^\s/.test(ln)) text(ln.replace(/^\s+/,'').replace(/\n\s+/g,'\n'),10.5,false,18);
+    else { y+=5; text(ln,10.5,true); }
+  });
+  var pages=doc.getPages(), n=pages.length;
+  pages.forEach(function(pg,i){
+    pg.drawText(pdfSafe((fullName()||'Student')+'  |  Cell Signaling Webquest  |  Page '+(i+1)+' of '+n),{x:M,y:28,size:9,font:F,color:MUTED});
+  });
+  var bytes=await doc.save();
+  return new Blob([bytes],{type:'application/pdf'});
+}
+function pdfName(){
+  var nm=((S.last||'').trim()+(S.first?' '+S.first.trim():'')).replace(/[\\\/:*?"<>|]+/g,'').trim();
+  return 'Cell Signaling Webquest - '+(nm||'Student')+'.pdf';
 }
 function copyText(text,ta){
   function fallback(){try{ta.focus();ta.select();return Promise.resolve(document.execCommand('copy'));}catch(e){return Promise.resolve(false);}}
@@ -817,7 +1086,7 @@ function encodeState(){return btoa(unescape(encodeURIComponent(JSON.stringify(S)
 function decodeState(code){
   var o=JSON.parse(decodeURIComponent(escape(atob(code.replace(/\s+/g,'')))));
   if(!o||typeof o!=='object'||typeof o.auto!=='object'||typeof o.written!=='object') throw new Error('bad');
-  var f=fresh(); f.name=typeof o.name==='string'?o.name:''; f.auto=o.auto; f.written=o.written; f.seq=o.seq||{};
+  var f=fresh(); copyMeta(f,o); f.auto=o.auto; f.written=o.written; f.seq=o.seq||{};
   return f;
 }
 
@@ -825,32 +1094,72 @@ function finishEl(){
   var s=h('section','task finish'); s.id='finish';
   s.append(h('h2','display','Finish and submit to Canvas'));
   var ol=h('ol');
-  ['Check that your name is entered at the top of the page.',
-   'Select “Create my submission summary.”',
-   'Select “Copy summary,” then paste it into the Text Entry box on the Canvas assignment and submit.'].forEach(function(t){ol.append(h('li',null,t));});
+  ['Check that your first and last name are entered at the top of the page.',
+   'Select “Download my PDF.” If your browser asks, choose to save the file.',
+   'Go to the Canvas assignment, select File Upload, upload the PDF, and submit.'].forEach(function(t){ol.append(h('li',null,t));});
   s.append(ol);
-  s.append(h('p','intro','Your teacher grades the written answers and Question 17. The auto-checked score is included in your summary.'));
+  s.append(h('p','intro','Your PDF shows your name, the date you finished, how long you worked, how much of each video you watched, and all of your answers.'));
   var row=h('div','row');
-  var make=h('button','btn','Create my submission summary'); make.type='button';
-  row.append(make); s.append(row);
-  var out=h('div'); out.hidden=true;
-  var ta=h('textarea','sum'); ta.readOnly=true; ta.setAttribute('aria-label','Your submission summary');
-  var crow=h('div','row gap');
-  var copy=h('button','btn','Copy summary'); copy.type='button';
+  var make=h('button','btn','Download my PDF'); make.type='button';
   var cmsg=h('span','msg'); cmsg.setAttribute('aria-live','polite');
-  crow.append(copy,cmsg);
-  out.append(ta,crow); s.append(out);
+  row.append(make,cmsg); s.append(row);
+  function say(t,ok){cmsg.textContent=t; if(ok==null) cmsg.removeAttribute('data-s'); else cmsg.dataset.s=ok?'ok':'bad';}
+  function fallbackSave(blob){
+    try{
+      var u=URL.createObjectURL(blob), a=document.createElement('a');
+      a.href=u; a.download=pdfName(); document.body.append(a); a.click(); a.remove();
+      setTimeout(function(){URL.revokeObjectURL(u);},60000);
+      return true;
+    }catch(e){return false;}
+  }
   make.addEventListener('click',function(){
-    if(!S.name.trim()){
-      out.hidden=false; ta.value=''; cmsg.textContent='Enter your name at the top of the page first.'; cmsg.dataset.s='bad';
-      $('#name').focus(); return;
+    if(!(S.first||'').trim()||!(S.last||'').trim()){
+      say('Enter your first and last name at the top of the page first.',false);
+      $((S.first||'').trim()?'#last':'#first').focus(); return;
     }
-    ta.value=buildSummary(); out.hidden=false; cmsg.textContent=''; cmsg.removeAttribute('data-s');
+    var blob;
+    make.disabled=true; say('Preparing your PDF…');
+    buildPdf().then(function(b){
+      blob=b;
+      return Promise.resolve(window.claude&&window.claude.use?window.claude.use('downloads'):null).catch(function(){return null;});
+    }).then(function(dl){
+      if(!dl){ return fallbackSave(blob)?'saved':'fail'; }
+      return dl.save({filename:pdfName(),data:blob}).then(function(){return 'saved';},function(err){
+        var c=err&&err.code;
+        if(c==='declined') return 'declined';
+        if(c==='rate_limited') return 'busy';
+        return fallbackSave(blob)?'saved':'fail';
+      });
+    }).then(function(r){
+      make.disabled=false;
+      if(r==='saved'){finished=true; say('Done. Your PDF is saved. Now upload it to the Canvas assignment.',true);}
+      else if(r==='declined') say('The download was canceled. Select “Download my PDF” again when you’re ready.',false);
+      else if(r==='busy') say('A download box is already open. Finish that one, then try again.',false);
+      else { say('The download didn’t work here. Use “Copy my answers as text” below instead.',false); txtd.open=true; }
+    },function(){
+      make.disabled=false;
+      say('The PDF couldn’t be made. Use “Copy my answers as text” below instead.',false); txtd.open=true;
+    });
+  });
+
+  var txtd=h('details','backup'); txtd.append(h('summary',null,'Can’t download? Copy my answers as text'));
+  txtd.append(h('p','intro','Only use this if the PDF won’t download. Copy the text, then paste it into the Text Entry box on the Canvas assignment.'));
+  var tr=h('div','row');
+  var tmake=h('button','btn ghost','Show my answers as text'); tmake.type='button';
+  tr.append(tmake); txtd.append(tr);
+  var ta=h('textarea','sum'); ta.readOnly=true; ta.hidden=true; ta.setAttribute('aria-label','Your answers as text');
+  var crow=h('div','row gap'); crow.hidden=true;
+  var copy=h('button','btn','Copy text'); copy.type='button';
+  var tmsg=h('span','msg'); tmsg.setAttribute('aria-live','polite');
+  crow.append(copy,tmsg); txtd.append(ta,crow); s.append(txtd);
+  tmake.addEventListener('click',function(){
+    if(!(S.first||'').trim()||!(S.last||'').trim()){ tmsg.textContent=''; crow.hidden=false; tmsg.dataset.s='bad'; tmsg.textContent='Enter your first and last name at the top of the page first.'; return; }
+    ta.value=buildSummary(); ta.hidden=false; crow.hidden=false; tmsg.textContent='';
   });
   copy.addEventListener('click',function(){
     copyText(ta.value,ta).then(function(ok){
-      if(ok){finished=true;cmsg.dataset.s='ok';cmsg.textContent='Copied. Now paste it into Canvas.';}
-      else{cmsg.dataset.s='bad';cmsg.textContent='Copy didn’t work. Select the text in the box and copy it yourself.';}
+      if(ok){finished=true;tmsg.dataset.s='ok';tmsg.textContent='Copied. Now paste it into Canvas.';}
+      else{tmsg.dataset.s='bad';tmsg.textContent='Copy didn’t work. Select the text in the box and copy it yourself.';}
     });
   });
 
@@ -878,7 +1187,7 @@ function finishEl(){
     try{
       var n=decodeState(rt.value);
       S=n; save(); render();
-      $('#name').value=S.name;
+      $('#first').value=S.first||''; $('#last').value=S.last||'';
     }catch(e){rm.dataset.s='bad';rm.textContent='That code didn’t work. Check that you copied all of it.';}
   });
   s.append(det);
@@ -893,7 +1202,7 @@ function finishEl(){
   start.addEventListener('click',function(){start.hidden=true;ask.hidden=false;});
   no.addEventListener('click',function(){start.hidden=false;ask.hidden=true;});
   yes.addEventListener('click',function(){
-    var nm=S.name; S=fresh(); S.name=nm; finished=false; save(); render();
+    var f1=S.first, l1=S.last; S=fresh(); S.first=f1; S.last=l1; finished=false; save(); render();
   });
   return s;
 }
@@ -912,10 +1221,33 @@ function render(){
   updateBar();
 }
 
-var nameEl=$('#name');
-nameEl.value=S.name||'';
-nameEl.addEventListener('input',function(){S.name=nameEl.value;commit();});
+['first','last'].forEach(function(k){
+  var el=$('#'+k);
+  el.value=S[k]||'';
+  el.addEventListener('input',function(){S[k]=el.value;commit();});
+});
 render();
+
+/* Time on task. Counts time while the student is active:
+   - on this page: interacted in the last 3 minutes, or a video is playing;
+   - away in another tab (the activity sites): came from this page within the
+     last 10 minutes. Idle time beyond those windows isn't counted. */
+var lastAct=Date.now(), lastTick=Date.now(), tick=0;
+['pointerdown','keydown','input','scroll','wheel','touchstart','mousemove'].forEach(function(ev){
+  window.addEventListener(ev,function(){lastAct=Date.now();},{passive:true,capture:true});
+});
+function showTime(){var e=$('#sTime'); if(e) e.innerHTML='Time working: <strong>'+fmtDur(S.time)+'</strong>';}
+showTime();
+setInterval(function(){
+  var now=Date.now(), dt=Math.min(65,Math.max(0,(now-lastTick)/1000)); lastTick=now;
+  var playing=[].some.call(document.querySelectorAll('.vid video'),function(v){return !v.paused&&!v.ended;});
+  var idle=now-lastAct;
+  var active = playing || (document.visibilityState==='visible' ? idle<180000 : idle<600000);
+  if(!active) return;
+  S.time=(S.time||0)+dt; tick++;
+  if(tick%15===0){save(); showTime();}
+},1000);
+document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='hidden') save(); });
 
 window.addEventListener('beforeunload',function(e){
   if(hasProgress()&&!finished){e.preventDefault();e.returnValue='';}
