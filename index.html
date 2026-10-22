@@ -6,7 +6,7 @@
 <title>Cell Signaling Webquest</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&family=Bricolage+Grotesque:wght@600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&family=Bricolage+Grotesque:wght@600;800&family=Cabin:wght@700&display=swap" rel="stylesheet">
 <style>
 :root{
   box-sizing:border-box;
@@ -237,7 +237,6 @@ details.backup textarea{min-height:90px;margin-top:8px;font:.8rem/1.3 ui-monospa
   <div class="statsrow">
     <span id="sAuto"></span>
     <span id="sWritten"></span>
-    <span id="sTime"></span>
     <span id="sSaved"></span>
   </div>
 </div>
@@ -524,7 +523,7 @@ function commit(){save();updateBar();}
 function autoSelect(id,sum,options,answer,o){
   o=o||{};
   AUTO[id]={sum:sum};
-  ORDER.push({kind:'auto',id:id,label:sum});
+  ORDER.push({kind:'auto',id:id,label:sum,q:CURQ,sub:o.label||o.tag||''});
   var wrap=h(o.inline?'span':'div','ctl'); mark(wrap); wrap.dataset.s='idle';
   if(o.label){var l=h('label',null,o.label); l.htmlFor='f-'+id; wrap.append(l);}
   var sel=h('select'); sel.id='f-'+id;
@@ -562,7 +561,7 @@ function autoSelect(id,sum,options,answer,o){
 function typedQ1(){
   var id='q1';
   AUTO[id]={sum:'Q1'};
-  ORDER.push({kind:'auto',id:id,label:'Q1'});
+  ORDER.push({kind:'auto',id:id,label:'Q1',q:CURQ,sub:''});
   var wrap=h('div','ctl'); mark(wrap); wrap.dataset.s='idle';
   var row=h('div','row');
   var inp=h('input'); inp.type='text'; inp.id='f-q1'; inp.autocomplete='off'; inp.spellcheck=false;
@@ -600,7 +599,7 @@ function typedQ1(){
 /* ------------------------------------------------------------------ */
 function writtenField(id,lab){
   var c=W[id];
-  ORDER.push({kind:'written',id:id});
+  ORDER.push({kind:'written',id:id,q:CURQ,sub:lab||''});
   var st=S.written[id]||(S.written[id]={text:'',revealed:false,mark:''});
   var wrap=h('div','sub'); mark(wrap); wrap.dataset.s='idle';
   if(lab){var l=h('label',null,lab); l.htmlFor='f-'+id; wrap.append(l);}
@@ -656,7 +655,7 @@ function writtenField(id,lab){
 /* ------------------------------------------------------------------ */
 function seqWidget(id,sum,steps,start){
   SEQ[id]={total:steps.length,sum:sum};
-  ORDER.push({kind:'seq',id:id,label:sum,steps:steps});
+  ORDER.push({kind:'seq',id:id,label:sum,steps:steps,q:CURQ,sub:''});
   var st=S.seq[id];
   if(!st||!st.order||st.order.length!==steps.length) st=S.seq[id]={order:start.slice(),checked:false,res:[],miss:0};
   var wrap=h('div','seqwrap'); mark(wrap); wrap.dataset.s='idle';
@@ -773,7 +772,9 @@ function sectionEl(n,title,intro,href,linkText){
   s.append(a);
   return s;
 }
+var CURQ=null;
 function qEl(num,text){
+  CURQ={num:num,text:text};
   var q=h('article','q'); q.id='question-'+num;
   var hd=h('div','qhead');
   hd.append(h('span','qnum',String(num)),h('p','qtext',text));
@@ -948,71 +949,117 @@ function fmtDur(sec){
   return (hr?hr+(hr===1?' hour':' hours')+(mm?' ':''):'')+(mm?mm+(mm===1?' minute':' minutes'):'');
 }
 function fmtDate(d){
-  return d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})+' at '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  return d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+var TITLE='Cell Signaling Webquest', COURSE='Biology A';
+/* Teacher-only time code */
+function timeCode(){
+  var m=(S.time||0)/60;
+  return m<10?'check':m<30?'star':m<=60?'dash':'burst';
+}
+var CODE_SYM={check:'\u2713',star:'\u2605',dash:'\u2014',burst:'\u2737'};
+
+function videoRows(){
+  return VID_ORDER.map(function(k){
+    var vs=vidStats(k);
+    return ['Video: '+VIDS[k].title,'Watched '+fmt(vs.sec)+' of '+fmt(vs.n)+' ('+vs.pct+'%)'+(vs.pct>=VID_DONE?', complete':'')+'.'];
+  });
+}
+/* Answers grouped by question: [{num,text,items:[{sub,resp:[...],tag}]}] */
+function answerGroups(){
+  var groups=[], last=null;
+  ORDER.forEach(function(o){
+    var q=o.q||{num:'',text:o.label};
+    if(!last||last.q!==q){ last={q:q,num:q.num,text:q.text,items:[]}; groups.push(last); }
+    var it={sub:o.sub||'',resp:[],tag:''};
+    if(o.kind==='auto'){
+      var r=S.auto[o.id];
+      if(!r||!r.v){it.resp=['(no answer)'];}
+      else{ it.resp=[r.v]; it.tag=(r.ok?'correct':'incorrect')+(r.miss?' • '+r.miss+(r.miss===1?' wrong try':' wrong tries'):''); }
+    } else if(o.kind==='seq'){
+      var st=S.seq[o.id];
+      it.resp=(st&&st.order?st.order:[]).map(function(si,i){return (i+1)+'. '+o.steps[si];});
+      it.tag=st&&st.checked?(st.res.filter(Boolean).length+' of '+o.steps.length+' steps in the right place'):'order not checked';
+      if(st&&st.miss) it.tag+=' • '+st.miss+(st.miss===1?' wrong check':' wrong checks');
+    } else {
+      var c=W[o.id], w=S.written[o.id]||{}, t=(w.text||'').trim();
+      it.resp=[t||'(no answer)'];
+      if(!c.noModel) it.tag='model answer: '+(w.mark==='match'?'student says theirs covers it':w.mark==='revise'?'student planned to revise':(w.revealed?'viewed, no self-check':'not compared'));
+    }
+    last.items.push(it);
+  });
+  return groups;
 }
 function summaryParts(){
-  var sc=score(), now=new Date(), st=new Date(S.started);
-  var info=[
-    ['Name',fullName()||'(not entered)'],
-    ['Date completed',fmtDate(now)],
-    ['Time spent working',fmtDur(S.time)],
-    ['First opened',isNaN(st)?'(unknown)':fmtDate(st)]
-  ];
-  var res=VID_ORDER.map(function(k){
-    var vs=vidStats(k);
-    return ['Video: '+VIDS[k].title,'Watched '+fmt(vs.sec)+' of '+fmt(vs.n)+' ('+vs.pct+'%), '+(vs.pct>=VID_DONE?'COMPLETE':'NOT COMPLETE')+'. Skipped ahead '+vs.skips+' time(s). Fastest speed '+vs.rate+'x.'];
-  }).concat([
+  var sc=score();
+  var res=videoRows().concat([
     ['Auto-checked items',sc.a+' / '+TOTAL_A+' correct'],
     ['Written responses',sc.w+' / '+TOTAL_W+' completed']
   ]);
-  return {info:info,res:res,body:answerLines()};
+  return {date:fmtDate(new Date()),res:res,groups:answerGroups()};
 }
 function buildSummary(){
-  var p=summaryParts(), L=['CELL SIGNALING WEBQUEST (Biology A)'];
-  p.info.concat(p.res).forEach(function(r){L.push(r[0]+': '+r[1]);});
+  var p=summaryParts();
+  var L=[TITLE,COURSE,fullName()||'(name not entered)','Date completed: '+p.date,'','Results '+CODE_SYM[timeCode()]];
+  p.res.forEach(function(r){L.push(r[0]+': '+r[1]);});
   L.push('');
-  return L.concat(p.body).join('\n');
-}
-function answerLines(){
-  var L=[];
-  ORDER.forEach(function(o){
-    if(o.kind==='auto'){
-      var r=S.auto[o.id];
-      if(!r||!r.v){L.push(o.label+': (no answer)');return;}
-      L.push(o.label+': '+r.v+' ['+(r.ok?'correct':'incorrect')+(r.miss?', '+r.miss+(r.miss===1?' miss':' misses'):'')+']');
-    } else if(o.kind==='seq'){
-      var st=S.seq[o.id];
-      var head=o.label+': '+(st&&st.checked?(st.res.filter(Boolean).length+' / '+o.steps.length+' steps in the right place'):'not checked');
-      if(st&&st.miss) head+=' ('+st.miss+(st.miss===1?' wrong check':' wrong checks')+')';
-      L.push(head);
-      if(st&&st.order) st.order.forEach(function(si,i){L.push('   '+(i+1)+'. '+o.steps[si]);});
-    } else {
-      var c=W[o.id], w=S.written[o.id]||{};
-      var t=(w.text||'').trim();
-      L.push(c.sum+':');
-      L.push('   '+(t?t.replace(/\n/g,'\n   '):'(no answer)'));
-      if(!c.noModel) L.push('   [model answer: '+(w.mark==='match'?'student says theirs covers it':w.mark==='revise'?'student planned to revise':(w.revealed?'viewed, no self-check':'not compared'))+']');
-    }
+  p.groups.forEach(function(g){
+    L.push((g.num!==''?g.num+'. ':'')+g.text);
+    g.items.forEach(function(it){
+      var pre=it.sub?'   '+it.sub+': ':'   ';
+      if(it.resp.length===1) L.push(pre+'“'+it.resp[0].replace(/\n/g,' ')+'”'+(it.tag?' ['+it.tag+']':''));
+      else { if(it.sub) L.push('   '+it.sub+':'); it.resp.forEach(function(x){L.push('      '+x);}); if(it.tag) L.push('      ['+it.tag+']'); }
+    });
+    L.push('');
   });
-  return L;
+  return L.join('\n');
 }
 
 /* PDF report */
 function pdfSafe(t){
   return String(t)
     .replace(/[‘’‛′]/g,"'").replace(/[“”‟″]/g,'"')
-    .replace(/[–—−]/g,'-').replace(/…/g,'...').replace(/ /g,' ')
+    .replace(/[–—−]/g,'-').replace(/…/g,'...').replace(/ /g,' ').replace(/•/g,'·')
     .replace(/[←-⇿]/g,'->').replace(/[^\x09\x0A\x0D\x20-\x7E¡-ÿ]/g,'');
+}
+/* Heading lines in Cabin Bold, drawn to an image so the PDF matches the font exactly */
+async function headingPng(lines,pt){
+  try{ await Promise.race([document.fonts.load('700 '+pt+'px Cabin'),new Promise(function(r){setTimeout(r,2500);})]); }catch(e){}
+  var scale=4, lh=pt*1.3, c=document.createElement('canvas'), x=c.getContext('2d');
+  var font='700 '+pt*scale+'px Cabin, "Helvetica Neue", Arial, sans-serif';
+  x.font=font;
+  var w=Math.ceil(Math.max.apply(null,lines.map(function(t){return x.measureText(t).width;}))+4*scale);
+  c.width=w; c.height=Math.ceil(lh*lines.length*scale+2*scale);
+  x=c.getContext('2d'); x.font=font; x.fillStyle='#16213a'; x.textBaseline='alphabetic';
+  lines.forEach(function(t,i){ x.fillText(t,0,(i*lh+pt)*scale); });
+  var blob=await new Promise(function(r){c.toBlob(r,'image/png');});
+  return {bytes:new Uint8Array(await blob.arrayBuffer()),w:w/scale,h:c.height/scale};
+}
+/* Teacher-only time symbol, drawn as vector shapes (x = left edge, cy = vertical middle, sz = height) */
+function drawSymbol(page,L,kind,x,cy,sz,color){
+  var r=sz/2, cx=x+r;
+  function star(n,ro,ri){
+    var d='';
+    for(var i=0;i<n*2;i++){ var rr=(i%2)?ri:ro, a=Math.PI*i/n-Math.PI/2;
+      d+=(i?'L':'M')+(rr*Math.cos(a)).toFixed(2)+' '+(rr*Math.sin(a)).toFixed(2)+' '; }
+    page.drawSvgPath(d+'Z',{x:cx,y:cy,color:color});
+  }
+  if(kind==='check'){
+    page.drawSvgPath('M'+(-r*0.85)+' '+(r*0.05)+' L'+(-r*0.25)+' '+(r*0.65)+' L'+(r*0.9)+' '+(-r*0.75),
+      {x:cx,y:cy,borderColor:color,borderWidth:sz*0.16,borderLineCap:L.LineCapStyle.Round});
+  } else if(kind==='star'){ star(5,r,r*0.42); }
+  else if(kind==='dash'){ page.drawLine({start:{x:x,y:cy},end:{x:x+sz,y:cy},thickness:sz*0.12,color:color}); }
+  else { star(8,r,r*0.45); }
 }
 async function buildPdf(){
   var L=window.PDFLib;
   if(!L) throw new Error('nolib');
   var doc=await L.PDFDocument.create();
-  doc.setTitle('Cell Signaling Webquest - '+pdfSafe(fullName()));
+  doc.setTitle(TITLE+' - '+pdfSafe(fullName()));
   doc.setAuthor(pdfSafe(fullName()));
-  var F=await doc.embedFont(L.StandardFonts.Helvetica), FB=await doc.embedFont(L.StandardFonts.HelveticaBold);
+  var F=await doc.embedFont(L.StandardFonts.Helvetica), FB=await doc.embedFont(L.StandardFonts.HelveticaBold), FI=await doc.embedFont(L.StandardFonts.HelveticaOblique);
   var W0=612, PH=792, M=54, CW=W0-2*M, y=0, page=null;
-  var INK=L.rgb(22/255,33/255,58/255), MUTED=L.rgb(82/255,96/255,122/255), TEAL=L.rgb(11/255,95/255,122/255), LINE=L.rgb(211/255,219/255,232/255);
+  var INK=L.rgb(22/255,33/255,58/255), MUTED=L.rgb(82/255,96/255,122/255), TEAL=L.rgb(11/255,95/255,122/255), LINE=L.rgb(211/255,219/255,232/255), RESP=L.rgb(10/255,80/255,105/255);
   function newPage(){ page=doc.addPage([W0,PH]); y=M; }
   function room(n){ if(!page||y+n>PH-M) newPage(); }
   function wrap(t,font,size,width){
@@ -1033,9 +1080,9 @@ async function buildPdf(){
     });
     return out;
   }
-  function text(t,size,bold,indent,color){
+  function text(t,size,font,indent,color,lhMul){
     indent=indent||0;
-    var font=bold?FB:F, lh=size*1.35;
+    var lh=size*(lhMul||1.35);
     wrap(pdfSafe(t),font,size,CW-indent).forEach(function(ln){
       room(lh);
       page.drawText(ln,{x:M+indent,y:PH-y-size,size:size,font:font,color:color||INK});
@@ -1045,28 +1092,40 @@ async function buildPdf(){
   function rule(c,th){ room(th+2); page.drawLine({start:{x:M,y:PH-y},end:{x:W0-M,y:PH-y},thickness:th,color:c}); }
   var p=summaryParts();
   newPage();
-  text('Cell Signaling Webquest',22,true);
-  text('Biology A',12,true,0,MUTED);
-  y+=8; rule(TEAL,2); y+=14;
-  p.info.forEach(function(r){
-    var lines=wrap(pdfSafe(r[1]),F,12,CW-140);
-    room(18*lines.length);
-    page.drawText(pdfSafe(r[0]+':'),{x:M,y:PH-y-12,size:12,font:FB,color:INK});
-    lines.forEach(function(ln,i){ page.drawText(ln,{x:M+140,y:PH-y-12-18*i,size:12,font:F,color:INK}); });
-    y+=18*lines.length;
-  });
-  y+=8;
-  text('Results',14,true); y+=2;
-  p.res.forEach(function(r){ text(r[0]+': '+r[1],11,false); y+=2; });
+
+  /* Heading: title, class, student name (Cabin Bold 14) + time-code card at top right */
+  var hd=await headingPng([TITLE,COURSE,fullName()||'(name not entered)'],14);
+  var img=await doc.embedPng(hd.bytes);
+  page.drawImage(img,{x:M,y:PH-M-hd.h,width:hd.w,height:hd.h});
+  y=M+hd.h+6;
+  text('Date completed: '+p.date,11,F,0,MUTED);
+  y+=6; rule(TEAL,2); y+=14;
+
+  room(20);
+  var ry=y;
+  text('Results',13,FB);
+  drawSymbol(page,L,timeCode(),M+FB.widthOfTextAtSize('Results',13)+8,PH-ry-13*0.64,11,INK);
+  y+=2;
+  p.res.forEach(function(r){ text(r[0]+': '+r[1],10.5,F); y+=1; });
   y+=8; rule(LINE,1); y+=14;
-  text('Answers',14,true); y+=4;
-  p.body.forEach(function(ln){
-    if(/^\s/.test(ln)) text(ln.replace(/^\s+/,'').replace(/\n\s+/g,'\n'),10.5,false,18);
-    else { y+=5; text(ln,10.5,true); }
+
+  text('Questions and answers',13,FB); y+=4;
+  p.groups.forEach(function(g){
+    y+=6;
+    room(40);
+    text((g.num!==''?g.num+'. ':'')+g.text,10.5,FB);
+    g.items.forEach(function(it){
+      y+=2;
+      var ind=16;
+      if(it.sub){ text(it.sub,10,F,ind,MUTED); ind=28; }
+      it.resp.forEach(function(r){ text(r,10.5,FI,ind,RESP); });
+      if(it.tag) text('('+it.tag+')',8.5,F,ind,MUTED);
+    });
   });
+
   var pages=doc.getPages(), n=pages.length;
   pages.forEach(function(pg,i){
-    pg.drawText(pdfSafe((fullName()||'Student')+'  |  Cell Signaling Webquest  |  Page '+(i+1)+' of '+n),{x:M,y:28,size:9,font:F,color:MUTED});
+    pg.drawText(pdfSafe((fullName()||'Student')+'  |  '+TITLE+'  |  '+COURSE+'  |  Page '+(i+1)+' of '+n),{x:M,y:28,size:9,font:F,color:MUTED});
   });
   var bytes=await doc.save();
   return new Blob([bytes],{type:'application/pdf'});
@@ -1098,7 +1157,7 @@ function finishEl(){
    'Select “Download my PDF.” If your browser asks, choose to save the file.',
    'Go to the Canvas assignment, select File Upload, upload the PDF, and submit.'].forEach(function(t){ol.append(h('li',null,t));});
   s.append(ol);
-  s.append(h('p','intro','Your PDF shows your name, the date you finished, how long you worked, how much of each video you watched, and all of your answers.'));
+  s.append(h('p','intro','Your PDF shows your name, the date you finished, how much of each video you watched, and all of your answers.'));
   var row=h('div','row');
   var make=h('button','btn','Download my PDF'); make.type='button';
   var cmsg=h('span','msg'); cmsg.setAttribute('aria-live','polite');
@@ -1236,7 +1295,7 @@ var lastAct=Date.now(), lastTick=Date.now(), tick=0;
 ['pointerdown','keydown','input','scroll','wheel','touchstart','mousemove'].forEach(function(ev){
   window.addEventListener(ev,function(){lastAct=Date.now();},{passive:true,capture:true});
 });
-function showTime(){var e=$('#sTime'); if(e) e.innerHTML='Time working: <strong>'+fmtDur(S.time)+'</strong>';}
+function showTime(){}
 showTime();
 setInterval(function(){
   var now=Date.now(), dt=Math.min(65,Math.max(0,(now-lastTick)/1000)); lastTick=now;
